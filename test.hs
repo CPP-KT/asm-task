@@ -78,9 +78,9 @@ test solution op m t = do ans <- getStudentAnswer solution l r
                                                                   ++ show l
                                                                   ++ "\n" ++ show op ++ "\n"
                                                                   ++ show r
-                                                                  ++ "\n= (real answer, possibly rounded)\n"
+                                                                  ++ "\n= (real answer)\n"
                                                                   ++ show realAns
-                                                                  ++ "\n!= (your answer, possibly rounded)\n"
+                                                                  ++ "\n!= (your answer)\n"
                                                                   ++ show stAns
                                                                   )
                             Left err  -> endWith $ Left err
