@@ -5,12 +5,12 @@ on:
 
 jobs:
   tests:
-    name: Testing asm
-    runs-on: ubuntu-22.04
+    name: Tests
+    runs-on: ubuntu-latest
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
           fetch-depth: 0
 
