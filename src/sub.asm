@@ -46,7 +46,7 @@ add_long_long:
                 pop             rdi
                 ret
 
-; adds a short number number to a long number
+; adds a short number to a long number
 ;    rdi -- address of summand #1 (long number)
 ;    rax -- summand #2 (64-bit unsigned)
 ;    rcx -- length of long number in qwords
