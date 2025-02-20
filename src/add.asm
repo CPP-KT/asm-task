@@ -1,15 +1,17 @@
+MAX_QWORDS:     equ             128
+
                 section         .text
 
                 global          _start
 _start:
 
-                sub             rsp, 2 * 128 * 8
-                lea             rdi, [rsp + 128 * 8]
-                mov             rcx, 128
+                sub             rsp, 2 * MAX_QWORDS * 8
+                lea             rdi, [rsp + MAX_QWORDS * 8]
+                mov             rcx, MAX_QWORDS
                 call            read_long
                 mov             rdi, rsp
                 call            read_long
-                lea             rsi, [rsp + 128 * 8]
+                lea             rsi, [rsp + MAX_QWORDS * 8]
                 call            add_long_long
 
                 call            write_long
