@@ -19,7 +19,7 @@ _start:
 
                 jmp             exit
 
-; adds two long number
+; adds two long numbers
 ;    rdi -- address of summand #1 (long number)
 ;    rsi -- address of summand #2 (long number)
 ;    rcx -- length of long numbers in qwords
@@ -44,7 +44,7 @@ add_long_long:
                 pop             rdi
                 ret
 
-; adds 64-bit number to long number
+; adds a short number number to a long number
 ;    rdi -- address of summand #1 (long number)
 ;    rax -- summand #2 (64-bit unsigned)
 ;    rcx -- length of long number in qwords
@@ -55,7 +55,7 @@ add_long_short:
                 push            rcx
                 push            rdx
 
-                xor             rdx,rdx
+                xor             rdx, rdx
 .loop:
                 add             [rdi], rax
                 adc             rdx, 0
@@ -70,7 +70,7 @@ add_long_short:
                 pop             rdi
                 ret
 
-; multiplies long number by a short
+; multiplies a long number by a short number
 ;    rdi -- address of multiplier #1 (long number)
 ;    rbx -- multiplier #2 (64-bit unsigned)
 ;    rcx -- length of long number in qwords
@@ -98,13 +98,13 @@ mul_long_short:
                 pop             rax
                 ret
 
-; divides long number by a short
+; divides a long number by a short number
 ;    rdi -- address of dividend (long number)
 ;    rbx -- divisor (64-bit unsigned)
 ;    rcx -- length of long number in qwords
 ; result:
 ;    quotient is written to rdi
-;    rdx -- remainder
+;    remainder is written to rdx
 div_long_short:
                 push            rdi
                 push            rax
@@ -126,7 +126,7 @@ div_long_short:
                 pop             rdi
                 ret
 
-; assigns a zero to long number
+; assigns zero to a long number
 ;    rdi -- argument (long number)
 ;    rcx -- length of long number in qwords
 set_zero:
@@ -142,7 +142,7 @@ set_zero:
                 pop             rax
                 ret
 
-; checks if a long number is a zero
+; checks if a long number is zero
 ;    rdi -- argument (long number)
 ;    rcx -- length of long number in qwords
 ; result:
@@ -160,7 +160,7 @@ is_zero:
                 pop             rax
                 ret
 
-; read long number from stdin
+; reads a long number from stdin
 ;    rdi -- location for output (long number)
 ;    rcx -- length of long number in qwords
 read_long:
@@ -206,7 +206,7 @@ read_long:
                 je              exit
                 jmp             .skip_loop
 
-; write long number to stdout
+; writes a long number to stdout
 ;    rdi -- argument (long number)
 ;    rcx -- length of long number in qwords
 write_long:
@@ -238,7 +238,7 @@ write_long:
                 pop             rax
                 ret
 
-; read one char from stdin
+; reads one char from stdin
 ; result:
 ;    rax == -1 if error occurs
 ;    rax \in [0; 255] if OK
@@ -269,7 +269,7 @@ read_char:
                 pop             rcx
                 ret
 
-; write one char to stdout, errors are ignored
+; writes one char to stdout, errors are ignored
 ;    al -- char
 write_char:
                 sub             rsp, 1
@@ -288,7 +288,7 @@ exit:
                 xor             rdi, rdi
                 syscall
 
-; print string to stdout
+; prints a string to stdout
 ;    rsi -- string
 ;    rdx -- size
 print_string:
