@@ -1,7 +1,7 @@
 #!/bin/bash
 set -ou pipefail
 
-mkdir build
+mkdir -p build
 cd build || exit
 cmake ..
 make
