@@ -21,9 +21,7 @@ jobs:
 
     - name: Check line spaces
       run: |
-        pushd $GITHUB_WORKSPACE
         ci-extra/check-lines.sh
-        popd
 
     - name: Check formatting
       run: |
