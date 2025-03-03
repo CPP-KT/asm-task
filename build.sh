@@ -3,6 +3,6 @@ set -ou pipefail
 
 mkdir -p build
 cd build || exit
-cmake ..
+cmake -G "Unix Makefiles" ..
 make
 cd ..
