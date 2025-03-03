@@ -6,7 +6,7 @@ on:
 jobs:
   tests:
     name: Tests
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, ubuntu, ghc]
 
     steps:
     - name: Checkout repository
@@ -16,9 +16,6 @@ jobs:
 
     - name: Install dependencies
       run: |
-        sudo apt update
-        sudo apt install binutils g++ cmake nasm python3 dos2unix
-        sudo apt install haskell-stack netbase
         stack upgrade
         stack install random optparse-applicative
 
