@@ -13,17 +13,17 @@ _start:
                 call            add_long_long
 
                 call            write_long
+                call            stdout_write_lf_flush
 
-                mov             al, 0x0a
-                call            write_char
-
+                xor             rdi, rdi
                 jmp             exit
 
-; adds two long numbers
+; Add two long numbers
+; Args:
 ;    rdi -- address of summand #1 (long number)
 ;    rsi -- address of summand #2 (long number)
 ;    rcx -- length of long numbers in qwords
-; result:
+; Result:
 ;    sum is written to rdi
 add_long_long:
                 push            rdi
