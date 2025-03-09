@@ -1,3 +1,25 @@
+; All the functions follow the System V ABI for amd64 in terms of saving registers,
+;    i.e. they will save rsp, rbp, rbx, r12 - r15 (for what a particular function might also save, see its description)
+; Global functions related to the long numbers also save the arguments
+;
+; All the functions that do read something, do that from stdin
+; All the functions that do write something, do that to either stdout or stderr,
+;    which is reflected in their name and/or description
+;
+; This file contains 3 groups of functions:
+;    - basic I/O functions
+;    - basic long number functions (including reading and writing them)
+;    - exit noreturn function, which flushes all the buffers with panic on error disabled and exits
+;
+; Implementation notes for the basic I/O functions:
+;    - The writing functions ignore EOF bit in a corresponding I/O meta
+;    - The reading functions will not try doing a read syscall if the corresponding EOF bit is set
+;    - The functions ignore any syscall error written in a corresponding I/O meta before they were called
+;        (which means you don't have to zero the error bits after processing it).
+;    - The I/O is buffered and '\n' char doesn't force flush, hence if you need the buffer to be flushed,
+;        call a corresponding flush or write_lf_flush function
+
+
 MAX_QWORDS:     equ             128
 
 IO_BUF_CAP:     equ             8192
@@ -243,203 +265,254 @@ sys_write:
                 __decl_out_syms stderr, FD_STDERR
 
 
-; adds a short number to a long number
-;    rdi -- address of summand #1 (long number)
-;    rax -- summand #2 (64-bit unsigned)
-;    rcx -- length of long number in qwords
-; result:
+; Add a short number to a long number
+; Destroyes: r8, r9
+; Args:
+;    rdi -- address of the long number
+;    rbx -- the short number (64-bit unsigned)
+;    rcx -- length of the long number in qwords (MUST be >= 2)
+; Result:
 ;    sum is written to rdi
+                global          add_long_short
 add_long_short:
-                push            rdi
-                push            rcx
-                push            rdx
-
-                xor             rdx, rdx
+                add             qword [rdi], rbx
+                jnc             .ret
+                lea             r8, [rcx - 1]
+                lea             r9, [rdi + 8]
 .loop:
-                add             [rdi], rax
-                adc             rdx, 0
-                mov             rax, rdx
-                xor             rdx, rdx
-                add             rdi, 8
-                dec             rcx
+                adc             qword [r9], 0
+                jnc             .ret
+                lea             r9, [r9 + 8]
+                dec             r8
                 jnz             .loop
-
-                pop             rdx
-                pop             rcx
-                pop             rdi
+.ret:
                 ret
 
-; multiplies a long number by a short number
-;    rdi -- address of multiplier #1 (long number)
-;    rbx -- multiplier #2 (64-bit unsigned)
-;    rcx -- length of long number in qwords
-; result:
+; Multiply a long number by a short number
+; Destroyes: r8, r9, r10, r11, rax
+; Args:
+;    rdi -- address of the long number
+;    rdx -- the short number (64-bit unsigned)
+;    rcx -- length of the long number in qwords
+; Result:
 ;    product is written to rdi
+                global          mul_long_short
 mul_long_short:
-                push            rax
-                push            rdi
-                push            rcx
-
-                xor             rsi, rsi
+                mov             r8, rcx
+                mov             r9, rdi
+                xor             r10, r10
 .loop:
-                mov             rax, [rdi]
-                mul             rbx
-                add             rax, rsi
-                adc             rdx, 0
-                mov             [rdi], rax
-                add             rdi, 8
-                mov             rsi, rdx
-                dec             rcx
+                mulx            rax, r11, qword [r9]
+                add             r11, r10
+                adc             rax, 0
+                mov             qword [r9], r11
+                mov             r10, rax
+                add             r9, 8
+                dec             r8
                 jnz             .loop
-
-                pop             rcx
-                pop             rdi
-                pop             rax
                 ret
 
-; divides a long number by a short number
-;    rdi -- address of dividend (long number)
-;    rbx -- divisor (64-bit unsigned)
-;    rcx -- length of long number in qwords
-; result:
+; Divide a long number by a short number
+; Destroyes: r8, rax
+; Args:
+;    rdi -- address of the long number
+;    rbx -- the short number (64-bit unsigned)
+;    rcx -- length of the long number in qwords
+; Result:
 ;    quotient is written to rdi
-;    remainder is written to rdx
+;    rdx -- remainder
+;    r9 -- non-zero if the quotient is non-zero
+                global          div_long_short
 div_long_short:
-                push            rdi
-                push            rax
-                push            rcx
-
-                lea             rdi, [rdi + 8 * rcx - 8]
+                mov             r8, rcx
+                xor             r9, r9
                 xor             rdx, rdx
-
 .loop:
-                mov             rax, [rdi]
+                mov             rax, qword [rdi + r8 * 8 - 8]
                 div             rbx
-                mov             [rdi], rax
-                sub             rdi, 8
-                dec             rcx
+                mov             qword [rdi + r8 * 8 - 8], rax
+                or              r9, rax
+                dec             r8
                 jnz             .loop
-
-                pop             rcx
-                pop             rax
-                pop             rdi
                 ret
 
-; assigns zero to a long number
-;    rdi -- argument (long number)
-;    rcx -- length of long number in qwords
+; Assign zero to a long number
+; Destroyes: rax, r8, r9
+; Args:
+;    rdi -- address of the long number
+;    rcx -- length of the long number in qwords
+                global          set_zero
 set_zero:
-                push            rax
-                push            rdi
-                push            rcx
+                mov             r8, rdi
+                mov             r9, rcx
 
                 xor             rax, rax
+                cld
                 rep stosq
 
-                pop             rcx
-                pop             rdi
-                pop             rax
+                mov             rdi, r8
+                mov             rcx, r9
                 ret
 
-; checks if a long number is zero
-;    rdi -- argument (long number)
-;    rcx -- length of long number in qwords
-; result:
-;    ZF=1 if zero
+; Check if a long number is zero
+; Destroyes: rax, r8, r9
+; Args:
+;    rdi -- address of the long number
+;    rcx -- length of the long number in qwords
+; Result:
+;    ZF = 1 if zero
+                global          is_zero
 is_zero:
-                push            rax
-                push            rdi
-                push            rcx
+                mov             r8, rdi
+                mov             r9, rcx
 
                 xor             rax, rax
+                cld
                 rep scasq
 
-                pop             rcx
-                pop             rdi
-                pop             rax
+                mov             rdi, r8
+                mov             rcx, r9
                 ret
 
-; reads a long number from stdin
-;    rdi -- location for output (long number)
-;    rcx -- length of long number in qwords
-read_long:
-                push            rcx
-                push            rdi
 
+; Read a long number from stdin
+; Destroyes: rax, rsi, rdx, rbx, r8, r9, r10, r11, panic on error flag for stdin
+; Args:
+;    rdi -- address of the long number
+;    rcx -- length of the long number in qwords
+; Result:
+;    read number is written to rdi
+                global          read_long
+read_long:
+                push            r12
+                push            r13
+                mov             r12, rdi
+                mov             r13, rcx
                 call            set_zero
                 or              qword [stdin_meta], IO_META_MASK_ERR_PANIC
-.loop:
-                call            read_char
-                or              rax, rax
-                js              exit
-                cmp             rax, 0x0a
-                je              .done
-                cmp             rax, '0'
-                jb              .invalid_char
-                cmp             rax, '9'
-                ja              .invalid_char
 
+.loop:
+                xor             rbx, rbx
+                mov             r8, 19
+.read_chunk_loop:
+                call            read_char
+                test            rax, rax
+                js              .done
+                cmp             rax, CHAR_LF
+                je              .done
                 sub             rax, '0'
-                mov             rbx, 10
-                mov             rdi, qword [rsp]
-                mov             rcx, qword [rsp + 8]
+                cmp             rax, 9
+                ja              .invalid_char
+                lea             rbx, [rbx + rbx * 4]
+                lea             rbx, [rax + rbx * 2]
+                dec             r8
+                jnz             .read_chunk_loop
+
+                mov             rdi, r12
+                mov             rcx, r13
+                mov             rdx, pow10_19
                 call            mul_long_short
                 call            add_long_short
                 jmp             .loop
-
-.done:
-                pop             rdi
-                pop             rcx
+.ret:
+                pop             r13
+                pop             r12
                 ret
-
+.done:
+                mov             rdx, qword [pow10_arr_reversed + r8 * 8]
+                mov             rdi, r12
+                mov             rcx, r13
+                cmp             rdx, 1
+                je              .ret
+                call            mul_long_short
+                call            add_long_short
+                jmp             .ret
 .invalid_char:
+                and             qword [stderr_meta], ~IO_META_MASK_ERR_PANIC
+                lea             r12, [rax + '0']
                 mov             rsi, invalid_char_msg
                 mov             rdx, invalid_char_msg_size
-                mov             r12, rax
                 call            stderr_write_string
                 mov             r8, r12
                 call            stderr_write_char
                 call            stderr_write_lf_flush
-
+                and             qword [stdin_meta], ~IO_META_MASK_ERR_PANIC
 .skip_loop:
                 call            read_char
-                or              rax, rax
-                js              exit
-                cmp             rax, 0x0a
-                je              exit
-                jmp             .skip_loop
+                test            rax, rax
+                js              .skip_loop_end
+                cmp             rax, CHAR_LF
+                jne             .skip_loop
+.skip_loop_end:
+                mov             rdi, qword [stdin_meta]
+                shr             rdi, 2
+                mov             rsi, 1
+                cmovz           rdi, rsi
+                jmp             exit
 
-; writes a long number to stdout
-;    rdi -- argument (long number)
-;    rcx -- length of long number in qwords
+
+; Writes a long number to stdout
+; Destroyes: r8, r9, r10, r11, rax, rsi, rdx, rbx, panic on error flag for stdout
+; Args:
+;    rdi -- address of the long number (the rdi value is saved, but the number is zeroed)
+;    rcx -- length of the long number in qwords
+                global          write_long
 write_long:
-                push            rax
+                push            r12
+                push            rdi
                 push            rcx
 
-                mov             rax, 20
-                mul             rcx
-                mov             rbp, rsp
-                sub             rsp, rax
+                mov             r11, rsp
+                lea             r12, qword [rcx + rcx * 4]
+                shl             r12, 2
+                mov             r8, 8
+                sub             r8, r12
+                and             r8, 7
+                add             r12, r8
+                sub             rsp, r12
 
-                mov             rsi, rbp
+                mov             rcx, r12
+                shr             rcx, 3
+                mov             rdi, rsp
+                mov             rax, qword_packed_ascii_zeroes
+                cld
+                rep stosq
+                mov             rcx, qword [r11]
+                mov             rdi, qword [r11 + 8]
 
+                mov             rbx, pow10_19
+                mov             r10, magic_num_div10
+                xor             rsi, rsi
 .loop:
-                mov             rbx, 10
+                sub             r11, rsi
                 call            div_long_short
-                add             rdx, '0'
+                mov             rsi, 19
+.chunk_loop:
+                mov             r8, rdx
+                mulx            rdx, rax, r10
+                shr             rdx, 3
+                lea             rax, qword [rdx + rdx * 4]
+                lea             rax, qword [rax + rax - '0']
+                sub             r8, rax
+                dec             r11
+                mov             byte [r11], r8b
                 dec             rsi
-                mov             [rsi], dl
-                call            is_zero
+                test            rdx, rdx
+                jnz             .chunk_loop
+
+                test            r9, r9
                 jnz             .loop
 
-                mov             rdx, rbp
-                sub             rdx, rsi
+                mov             rsi, r11
+                lea             rdx, [rsp + r12]
+                sub             rdx, r11
                 or              qword [stdout_meta], IO_META_MASK_ERR_PANIC
                 call            stdout_write_string
 
-                mov             rsp, rbp
+                add             rsp, r12
                 pop             rcx
-                pop             rax
+                pop             rdi
+                pop             r12
                 ret
 
 
@@ -520,3 +593,20 @@ __perror_exit:
 
                 __decl_str      read_err_msg, "Got an error when was trying to read the input", CHAR_LF
                 __decl_str      write_err_msg, "Got an error when was trying to write", CHAR_LF
+
+qword_packed_ascii_zeroes: \
+                equ             0x3030303030303030
+
+magic_num_div10: \
+                equ             0xcccccccccccccccd
+
+pow10_19: \
+                equ             0x8ac7230489e80000
+
+pow10_arr_reversed:
+                dq              pow10_19, 0xde0b6b3a7640000, 0x16345785d8a0000, 0x2386f26fc10000, \
+                                0x38d7ea4c68000, 0x5af3107a4000, 0x9184e72a000, 0xe8d4a51000, \
+                                0x174876e800, 0x2540be400, 0x3b9aca00, 0x5f5e100, 0x989680, 0xf4240, \
+                                0x186a0, 0x2710, 0x3e8, 0x64, 0xa, 0x1
+pow10_arr_reversed_size: \
+                equ             $ - pow10_arr_reversed
